@@ -1,0 +1,6 @@
+{
+    "crawlers": ["pet_cat_australia"
+        , "pet_cat_kingdom"
+        , "pet_cat_usa"
+        , "pet_cat_zealand"]
+}

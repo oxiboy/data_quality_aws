@@ -1,0 +1,258 @@
+Parameters:
+
+  RoleExecution:
+    Type: String
+    Default: arn:aws:iam::393747608406:role/service-role/AWSGlueServiceRole-Andres-Lagos
+    Description: the role execution of the crawler
+
+  TagValue:
+    Type: String
+    Default: DE-Chile
+    Description: define the Tags value
+
+  GlueDataBaseName:
+    Type: String
+    Default: data_quality
+    Description: the name of the database
+
+  GlueDataBaseLocation:
+    Type: String
+    Default: s3://andres-lagos-bucket/data_quality/
+    Description: the S3 key of the database
+
+  GlueDictionaryBaseName:
+    Type: String
+    Default: dictionary_quality
+    Description: the name of the dictionary database
+
+  GlueDictionaryBaseLocation:
+    Type: String
+    Default: s3://andres-lagos-bucket/dictionary_quality/
+    Description: the S3 key of the database
+
+  GlueCrawlerName1:
+    Type: String
+    Default: pet_cat_australia
+    Description: Name of a Crawler
+
+  CrawlerTargetLocation1:
+    Type: String
+    Default: s3://andres-lagos-bucket/data_quality/australia/
+    Description: S3 key of the crawler data
+
+  GlueCrawlerName2:
+    Type: String
+    Default: pet_cat_kingdom
+    Description: Name of a Crawler
+  CrawlerTargetLocation2:
+    Type: String
+    Default: s3://andres-lagos-bucket/data_quality/kingdom/
+    Description: S3 key of the crawler data
+
+  GlueCrawlerName3:
+    Type: String
+    Default: pet_cat_usa
+    Description: Name of a Crawler
+
+  CrawlerTargetLocation3:
+    Type: String
+    Default: s3://andres-lagos-bucket/data_quality/usa/
+    Description: S3 key of the crawler data
+
+  GlueCrawlerName4:
+    Type: String
+    Default: pet_cat_zealand
+    Description: Name of a Crawler
+
+  CrawlerTargetLocation4:
+    Type: String
+    Default: s3://andres-lagos-bucket/data_quality/zealand/
+    Description: S3 key of the crawler data
+
+  DictionaryTable:
+    Type: String
+    Default: table
+    Description: the name of the table "table dictionary"
+
+  DictionaryColumn:
+    Type: String
+    Default: column
+    Description: the name of the table "column dictionary"
+
+  GlueJobS3LocationLandMetastore:
+    Type: String
+    Default: s3://andres-lagos-bucket/glue_scripts/land_metastore.py
+    Description: the key of the script in S3
+
+  GlueJobNameLandMetastore:
+    Type: String
+    Default: data_quality_land_metastore
+    Description: Name of glue job Populate dictionaries metadata
+
+  GlueJobNumberWorkersLandMetastore:
+    Type: String
+    Default: 2
+    Description: Number of workers of glue job Populate dictionaries metadata
+  
+  TimerSeconds:
+    Type: String
+    Default: 6
+    Description: Time waiting to finish the crawlers
+
+Resources:
+  GlueDictionaryDataBase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        LocationUri: !Ref GlueDictionaryBaseLocation
+        Name: !Ref GlueDictionaryBaseName
+
+  Crawler1:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref GlueCrawlerName1
+      Role: !Ref RoleExecution
+      DatabaseName: !Ref GlueDataBaseName
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
+      Targets:
+        S3Targets:
+          - Path: !Ref CrawlerTargetLocation1
+      SchemaChangePolicy:
+        UpdateBehavior: "LOG"
+        DeleteBehavior: "LOG"
+      Tags:
+        team: !Ref TagValue
+
+  Crawler2:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref GlueCrawlerName2
+      Role: !Ref RoleExecution
+      DatabaseName: !Ref GlueDataBaseName
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
+      Targets:
+        S3Targets:
+          - Path: !Ref CrawlerTargetLocation2
+      SchemaChangePolicy:
+        UpdateBehavior: "LOG"
+        DeleteBehavior: "LOG"
+      Tags:
+        team: !Ref TagValue
+
+  Crawler3:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref GlueCrawlerName3
+      Role: !Ref RoleExecution
+      DatabaseName: !Ref GlueDataBaseName
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
+      Targets:
+        S3Targets:
+          - Path: !Ref CrawlerTargetLocation3
+      SchemaChangePolicy:
+        UpdateBehavior: "LOG"
+        DeleteBehavior: "LOG"
+      Tags:
+        team: !Ref TagValue
+
+  Crawler4:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref GlueCrawlerName4
+      Role: !Ref RoleExecution
+      DatabaseName: !Ref GlueDataBaseName
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
+      Targets:
+        S3Targets:
+          - Path: !Ref CrawlerTargetLocation4
+      SchemaChangePolicy:
+        UpdateBehavior: "LOG"
+        DeleteBehavior: "LOG"
+      Tags:
+        team: !Ref TagValue
+
+  GlueJobUpdateDictionaries:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: glueetl
+        ScriptLocation: "s3://andres-lagos-bucket/glue_scripts/land_metastore.py"
+      DefaultArguments:
+        "--job-bookmark-option": "job-bookmark-enable"
+        "--config": "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        "--datalake-formats": "iceberg"
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      MaxRetries: 0
+      GlueVersion: 4.0
+      WorkerType: G.1X
+      NumberOfWorkers: !Ref GlueJobNumberWorkersLandMetastore
+      Name: !Ref GlueJobNameLandMetastore
+      Role: !Ref RoleExecution
+      Tags:
+        team: !Ref TagValue
+
+  StepMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: DataQuality
+      RoleArn: !Ref RoleExecution
+      Definition:
+        #Execute the crawlers
+        Comment: Step machine Data Quality
+        StartAt: GlueCrawlerExecution
+        States:
+          GlueCrawlerExecution:
+            Type: Map
+            ItemProcessor:
+                  ProcessorConfig:
+                    Mode: INLINE
+                  StartAt: StartCrawler
+                  States:
+                    StartCrawler:
+                      Type: Task
+                      End: true
+                      Parameters:
+                        Name.$: $.Name
+                      Resource: arn:aws:states:::aws-sdk:glue:startCrawler
+            ItemsPath: $.crawlers            
+            ItemSelector:
+              Name.$: $$.Map.Item.Value
+            ResultPath: $.Result
+            Next: GlueCrawlerFinish
+          # Wait for the crawlers to finished the process
+          GlueCrawlerFinish:
+            Type: Task
+            Parameters:
+              CrawlerNames.$: $.crawlers
+            Resource: arn:aws:states:::aws-sdk:glue:batchGetCrawlers
+            ResultPath: $.Result
+            Next: CheckStatus
+          CheckStatus:
+            Type: Pass
+            Next: CheckProcess
+            Parameters:
+              "status.$": "States.ArrayContains($.Result.Crawlers.*.State, 'RUNNING')"
+            ResultPath: $.Result
+          CheckProcess:
+            Type: Choice
+            Choices:
+              - Variable: $.Result.status
+                BooleanEquals: true
+                Next: Timer
+            Default: StartGlueJobLandMetastore
+          Timer:
+            Type: Wait
+            Seconds: 5
+            Next: GlueCrawlerFinish
+          StartGlueJobLandMetastore:
+            End: true
+            Parameters:
+              JobName: data_quality_land_metastore
+            Resource: arn:aws:states:::glue:startJobRun
+            Type: Task
