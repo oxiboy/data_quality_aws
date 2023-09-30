@@ -12,12 +12,12 @@ Parameters:
 
   GlueDataBaseName:
     Type: String
-    Default: data_quality
+    Default: data_lake
     Description: the name of the database
 
   GlueDataBaseLocation:
     Type: String
-    Default: s3://andres-lagos-bucket/data_quality/
+    Default: s3://andres-lagos-bucket/data_lake/
     Description: the S3 key of the database
 
   GlueDictionaryBaseName:
@@ -107,6 +107,14 @@ Resources:
       DatabaseInput:
         LocationUri: !Ref GlueDictionaryBaseLocation
         Name: !Ref GlueDictionaryBaseName
+
+  GlueDictionaryDataLake:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        LocationUri: !Ref GlueDataBaseLocation
+        Name: !Ref  GlueDataBaseName
 
   Crawler1:
     Type: AWS::Glue::Crawler

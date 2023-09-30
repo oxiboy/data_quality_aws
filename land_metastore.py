@@ -432,6 +432,6 @@ class Upsert_Metadata():
         self.update_delete_tables()
 
 Create_Dictionary_Tables(catalog_name, database_name).create_tables()
-Land_Metastore(['data_quality']).main()
+Land_Metastore(['data_lake']).main()
 Upsert_Metadata(catalog_name, database_name).upsert_tables()
 job.commit()
