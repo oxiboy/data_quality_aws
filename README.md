@@ -1,3 +1,3 @@
 # data_quality_aws
 
-add datalake perimissions to the users
+it is necessary to add the lake formation location manually

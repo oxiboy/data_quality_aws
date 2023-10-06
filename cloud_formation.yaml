@@ -116,6 +116,34 @@ Resources:
         LocationUri: !Ref GlueDataBaseLocation
         Name: !Ref  GlueDataBaseName
 
+  LakeFormationPermissionDataLake:
+    Type: AWS::LakeFormation::Permissions
+    DependsOn: GlueDictionaryDataBase
+    Properties: 
+      DataLakePrincipal: 
+        DataLakePrincipalIdentifier: !Ref RoleExecution
+      Permissions: 
+        - ALL
+      PermissionsWithGrantOption: 
+        - ALL
+      Resource: 
+        DatabaseResource:
+            Name: !Ref GlueDataBaseName
+
+  LakeFormationPermissionDictionary:
+    Type: AWS::LakeFormation::Permissions
+    DependsOn: GlueDictionaryDataLake
+    Properties: 
+      DataLakePrincipal: 
+        DataLakePrincipalIdentifier: !Ref RoleExecution
+      Permissions: 
+        - ALL
+      PermissionsWithGrantOption: 
+        - ALL
+      Resource: 
+        DatabaseResource:
+            Name: !Ref GlueDictionaryBaseName
+
   Crawler1:
     Type: AWS::Glue::Crawler
     Properties:
@@ -194,6 +222,7 @@ Resources:
         "--job-bookmark-option": "job-bookmark-enable"
         "--config": "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
         "--datalake-formats": "iceberg"
+        "--enable-glue-datacatalog": true
       ExecutionProperty:
         MaxConcurrentRuns: 1
       MaxRetries: 0
