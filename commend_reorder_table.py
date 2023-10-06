@@ -78,7 +78,11 @@ class Update_Metadata:
         Use the data dictionary to determine the ordinal position and comment associated
         with each column in a given table. Generate an alter table statement that applies
         these changes to the table.
-        ########################################
+        Arg:
+            table: the table thas is going to be order
+            dictionary: column table name
+        Return:
+            None
         """
       # check if table is view, skip if so.
         if self.is_view(table):
@@ -108,8 +112,15 @@ class Update_Metadata:
         print()
 
 
-    def is_view(self, table, dictionary = 'table'):
-        """Check if a table exists, if so return True, if view return False."""
+    def is_view(self, table: str, dictionary: str = 'table') -> bool:
+        """
+        Check if a table exists, if so return True, if view return False.
+        Arg:
+            table: the table name
+            dictionary: name of the dictionary name table
+        Return:
+            if is view or not
+        """
 
         df = spark.sql(f"""SELECT * 
             FROM {self.catalog}.{self.dictionary_database}.{dictionary}
