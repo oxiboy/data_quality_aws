@@ -288,8 +288,31 @@ Resources:
             Seconds: 5
             Next: GlueCrawlerFinish
           StartGlueJobLandMetastore:
-            End: true
+            Type: Task
+            Next: CheckLandMetastoreJob
+            Resource: arn:aws:states:::glue:startJobRun
             Parameters:
               JobName: data_quality_land_metastore
-            Resource: arn:aws:states:::glue:startJobRun
+          CheckStatusLandMetastoreJob:
             Type: Task
+            Next: CheckProcessLandMetastoreJob
+            Resource: arn:aws:states:::aws-sdk:glue:getJobRun
+                Parameters:
+                  JobName: data_quality_land_metastore
+                  RunId.$: $.JobRunId
+          CheckProcessLandMetastoreJob:
+            Type: Choice
+            Choices:
+              - Variable: $.JobRunState
+                StringEquals: SUCCEEDED
+                Next: TimerLandMetastore
+            Default: Success
+          TimerLandMetastore:
+            Type: Wait
+            Seconds: 10
+            Next: CheckProcessLandMetastoreJob
+          Default: Success
+            Success:
+              Type: Succeed
+
+

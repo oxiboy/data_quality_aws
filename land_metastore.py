@@ -189,6 +189,9 @@ class Land_Metastore():
                             table_metadata.extend([value.split('=')[1] for value in re.split(r",(?!,)",index[1])])
                         else:
                             table_metadata.append(index[1])
+                if len(table_metadata) == 19:
+                    table_metadata.insert(10, '0')
+                    table_metadata.insert(11, '') 
                 table_metadata.append(False)
                 table_metadata.append(table['description'])
                 all_table_metadata.append(table_metadata)
@@ -201,7 +204,8 @@ class Land_Metastore():
                 all_table_metadata.append(table_metadata)
         table_metadata_columns = ['database', 'table', 'crawlerDeserializerV', 'crawlerSerializarV' 
                                 , 'updateCrawler', 'areColumnsQuoted', 'avgRecordSize', 'classification' 
-                                , 'columnsOrdered', 'compressionType', 'delimiter', 'objectCount'
+                                , 'columnsOrdered', 'compressionType', 'delimiter', 'last_modified_by'
+                                ,  'last_modified_time', 'objectCount'
                                 , 'recordCount', 'sizeKey', 'skipLine', 'typeData', 'location'
                                 , 'storageProperties', 'PartitionProvider', 'is_view', 'description']
         df_tables = pd.DataFrame(all_table_metadata,  columns=table_metadata_columns)
