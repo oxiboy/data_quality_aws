@@ -99,6 +99,11 @@ Parameters:
     Default: 6
     Description: Time waiting to finish the crawlers
 
+  TimerSecondsProcessLandMetastore:
+    Type: String
+    Default: 10
+    Description: Time waiting to finish the crawlers
+    
 Resources:
   GlueDictionaryDataBase:
     Type: AWS::Glue::Database
@@ -289,7 +294,7 @@ Resources:
             Next: GlueCrawlerFinish
           StartGlueJobLandMetastore:
             Type: Task
-            Next: CheckLandMetastoreJob
+            Next: CheckStatusLandMetastoreJob
             Resource: arn:aws:states:::glue:startJobRun
             Parameters:
               JobName: data_quality_land_metastore
@@ -297,22 +302,22 @@ Resources:
             Type: Task
             Next: CheckProcessLandMetastoreJob
             Resource: arn:aws:states:::aws-sdk:glue:getJobRun
-                Parameters:
-                  JobName: data_quality_land_metastore
-                  RunId.$: $.JobRunId
+            Parameters:
+              JobName: data_quality_land_metastore
+              RunId.$: $.JobRunId
+            ResultPath: $.Result
           CheckProcessLandMetastoreJob:
             Type: Choice
             Choices:
-              - Variable: $.JobRunState
-                StringEquals: SUCCEEDED
+              - Variable: $.Result.JobRun['JobRunState']
+                StringEquals: RUNNING
                 Next: TimerLandMetastore
             Default: Success
           TimerLandMetastore:
             Type: Wait
-            Seconds: 10
-            Next: CheckProcessLandMetastoreJob
-          Default: Success
-            Success:
-              Type: Succeed
+            Seconds: !Ref TimerSecondsProcessLandMetastore
+            Next: CheckStatusLandMetastoreJob
+          Success:
+            Type: Succeed
 
 
