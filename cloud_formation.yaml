@@ -93,14 +93,34 @@ Parameters:
     Type: String
     Default: 2
     Description: Number of workers of glue job Populate dictionaries metadata
+
+  GlueJobNameReoderTable:
+    Type: String
+    Default: comment_reorder_table
+    Description: Name of glue job Populate dictionaries metadata
+
+  GlueJobNumberWorkersReoderTable:
+    Type: String
+    Default: 2
+    Description: Number of workers of glue job Populate dictionaries metadata
   
   TimerSeconds:
     Type: String
     Default: 6
     Description: Time waiting to finish the crawlers
 
+  TimerSecondsProcessCrawlers:
+    Type: Number
+    Default: 5
+    Description: Time waiting to finish the crawlers
+
   TimerSecondsProcessLandMetastore:
-    Type: String
+    Type: Number
+    Default: 10
+    Description: Time waiting to finish the crawlers
+  
+  TimerSecondsProcessReorderTable:
+    Type: Number
     Default: 10
     Description: Time waiting to finish the crawlers
     
@@ -239,6 +259,28 @@ Resources:
       Tags:
         team: !Ref TagValue
 
+  GlueJobReorderTable:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: glueetl
+        ScriptLocation: "s3://andres-lagos-bucket/glue_scripts/comment_reorder_table.py"
+      DefaultArguments:
+        "--job-bookmark-option": "job-bookmark-enable"
+        "--config": "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        "--datalake-formats": "iceberg"
+        "--enable-glue-datacatalog": true
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      MaxRetries: 0
+      GlueVersion: 4.0
+      WorkerType: G.1X
+      NumberOfWorkers: !Ref GlueJobNumberWorkersReoderTable
+      Name: !Ref GlueJobNameReoderTable
+      Role: !Ref RoleExecution
+      Tags:
+        team: !Ref TagValue
+
   StepMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
@@ -290,20 +332,20 @@ Resources:
             Default: StartGlueJobLandMetastore
           Timer:
             Type: Wait
-            Seconds: 5
+            Seconds: !Ref TimerSecondsProcessCrawlers
             Next: GlueCrawlerFinish
           StartGlueJobLandMetastore:
             Type: Task
             Next: CheckStatusLandMetastoreJob
             Resource: arn:aws:states:::glue:startJobRun
             Parameters:
-              JobName: data_quality_land_metastore
+              JobName: !Ref GlueJobNameLandMetastore
           CheckStatusLandMetastoreJob:
             Type: Task
             Next: CheckProcessLandMetastoreJob
             Resource: arn:aws:states:::aws-sdk:glue:getJobRun
             Parameters:
-              JobName: data_quality_land_metastore
+              JobName: !Ref GlueJobNameLandMetastore
               RunId.$: $.JobRunId
             ResultPath: $.Result
           CheckProcessLandMetastoreJob:
@@ -312,11 +354,36 @@ Resources:
               - Variable: $.Result.JobRun['JobRunState']
                 StringEquals: RUNNING
                 Next: TimerLandMetastore
-            Default: Success
+            Default: StartGlueJobReorderTable
           TimerLandMetastore:
             Type: Wait
             Seconds: !Ref TimerSecondsProcessLandMetastore
             Next: CheckStatusLandMetastoreJob
+          StartGlueJobReorderTable:
+            Type: Task
+            Next: CheckStatusReorderTable
+            Resource: arn:aws:states:::glue:startJobRun
+            Parameters:
+              JobName: !Ref GlueJobNameReoderTable
+          CheckStatusReorderTable:
+            Type: Task
+            Next: CheckProcessReorderTable
+            Resource: arn:aws:states:::aws-sdk:glue:getJobRun
+            Parameters:
+              JobName: !Ref GlueJobNameReoderTable
+              RunId.$: $.JobRunId
+            ResultPath: $.Result
+          CheckProcessReorderTable:
+            Type: Choice
+            Choices:
+              - Variable: $.Result.JobRun['JobRunState']
+                StringEquals: RUNNING
+                Next: TimerReorderTable
+            Default: Success
+          TimerReorderTable:
+            Type: Wait
+            Seconds: !Ref TimerSecondsProcessReorderTable
+            Next: CheckStatusReorderTable
           Success:
             Type: Succeed
 

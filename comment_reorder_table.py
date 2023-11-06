@@ -1,6 +1,8 @@
+import boto3
 import sys
 import pandas as pd
 import re
+from time import sleep
 from pyspark.sql import SparkSession
 from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
@@ -31,18 +33,21 @@ class Update_Metadata:
     Update the metadata tables and add some descriptions
     """
     
-    def __init__(self, catalog: str, dictionary_database: str, database: str) -> None:
+    def __init__(self, catalog: str, dictionary_database: str, database: str, output_file: str) -> None:
         """
         initialize the application
         Arg:
             catalog: the glue catalog name
             dictionary_database: name of the quality database
             database: the database that are going to the analyze
+            path_athena: the path when all of the athena output is going to be "S3 path"
         return: None
         """
         self.catalog = catalog
         self.dictionary_database = dictionary_database
         self.database = database
+        self.athena_client = boto3.client(service_name='athena')
+        self.output_file= output_file
         
     def reorder_columns_alphabetically(self, dictionary: str = 'column') -> None:
         """
@@ -73,16 +78,27 @@ class Update_Metadata:
         for table in tables:
             self.update_table(table=table)
             
+    def execute_query(self, query: str, output_file: str = None) -> None:
+        """
+        Execute the query in Athena
+        Arg:
+            query: query to execute
+            output_file: path of the S3 output
+        """
+        if output_file is None: output_file = self.output_file
+        query_id = self.athena_client.start_query_execution(QueryString=query.replace('glue_catalog.','')
+            , WorkGroup='primary',ResultConfiguration={'OutputLocation': output_file})['QueryExecutionId']
+        while True:
+            status = self.athena_client.get_query_execution(QueryExecutionId=query_id)['QueryExecution']['Status']['State']
+            if status != 'RUNNING': break 
+            sleep(5)
+            
     def update_table(self, table: str, dictionary : str = 'column') -> None:
         """
         Use the data dictionary to determine the ordinal position and comment associated
         with each column in a given table. Generate an alter table statement that applies
         these changes to the table.
-        Arg:
-            table: the table thas is going to be order
-            dictionary: column table name
-        Return:
-            None
+        ########################################
         """
       # check if table is view, skip if so.
         if self.is_view(table):
@@ -108,19 +124,11 @@ class Update_Metadata:
         query = f"ALTER TABLE {self.catalog}.{self.database}.{table} REPLACE COLUMNS ({alter})"
 
         print(query)
-        #spark.sql(query)
-        print()
+        self.execute_query(query)
 
 
-    def is_view(self, table: str, dictionary: str = 'table') -> bool:
-        """
-        Check if a table exists, if so return True, if view return False.
-        Arg:
-            table: the table name
-            dictionary: name of the dictionary name table
-        Return:
-            if is view or not
-        """
+    def is_view(self, table, dictionary = 'table'):
+        """Check if a table exists, if so return True, if view return False."""
 
         df = spark.sql(f"""SELECT * 
             FROM {self.catalog}.{self.dictionary_database}.{dictionary}
@@ -133,7 +141,8 @@ class Update_Metadata:
         return df['is_view'][0]
     
 cl_reorder_data = Update_Metadata(catalog='glue_catalog'
-    , dictionary_database='dictionary_quality', database='data_lake')
+    , dictionary_database='dictionary_quality', database='data_lake'
+    , output_file='s3://andres-lagos-bucket/query-athena/')
 cl_reorder_data.update_database()
 cl_reorder_data.reorder_columns_alphabetically()
 job.commit()

@@ -344,7 +344,7 @@ class Upsert_Metadata():
         spark.sql("""
         CREATE OR REPLACE TEMP VIEW stage_table_metadata AS
         SELECT 
-            table.database || '.' || table.table AS tableId,
+            table.database || '.' || table.table AS table_id,
             table.database AS database,
             table.table AS table,
             CASE WHEN table.description ='None' THEN null ELSE table.description END AS description,
