@@ -34,7 +34,7 @@ class Create_Dictionary_Tables():
         initialize the database parameters
         Arg:
             catalog_name: the glue data catalog name
-            database_name: the glye database name of dictionary data
+            database_name: the glue database name of dictionary data
         """
         
         self.database_name = database_name
@@ -130,7 +130,7 @@ class Land_Metastore():
     of the tables contained in the database list.
     
     Where a landed value is the string 'None', it represents a null value
-    (pandas doesnt support a null types).
+    (pandas doesn't support a null types).
     
 
     Args:
@@ -152,7 +152,7 @@ class Land_Metastore():
         self.tables = tables
 
     def get_column_df(self) -> pd.DataFrame:
-        "Return pandas databframe of column metadata given list of tables."
+        "Return pandas dataframe of column metadata given list of tables."
        
         all_column_metadata=[]
         for table in self.tables:
@@ -219,7 +219,7 @@ class Land_Metastore():
 
 
     def get_create_df(self) -> pd.DataFrame:
-        """Return pandas databframe of create table statements given list of tables."""
+        """Return pandas dataframe of create table statements given list of tables."""
         
         all_create_metadata = []
         for table in self.tables:
