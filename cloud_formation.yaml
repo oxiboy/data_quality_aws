@@ -103,6 +103,16 @@ Parameters:
     Type: String
     Default: 2
     Description: Number of workers of glue job Populate dictionaries metadata
+
+  GlueJobNameDataQuality:
+    Type: String
+    Default: data_quality
+    Description: Name of glue job Populate dictionaries metadata
+
+  GlueJobNumberWorkersDataQuality:
+    Type: String
+    Default: 2
+    Description: Number of workers of glue job Populate dictionaries metadata
   
   TimerSeconds:
     Type: String
@@ -117,12 +127,17 @@ Parameters:
   TimerSecondsProcessLandMetastore:
     Type: Number
     Default: 10
-    Description: Time waiting to finish the crawlers
+    Description: Time waiting to finish glue job land metastore
   
   TimerSecondsProcessReorderTable:
     Type: Number
     Default: 10
-    Description: Time waiting to finish the crawlers
+    Description: Time waiting to finish the glue job Reorder table
+
+  TimerSecondsDataQuality:
+    Type: Number
+    Default: 10
+    Description: Time waiting to finish the glue job data quality
     
 Resources:
   GlueDictionaryDataBase:
@@ -281,6 +296,28 @@ Resources:
       Tags:
         team: !Ref TagValue
 
+  GlueJobDataQuality:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: glueetl
+        ScriptLocation: "s3://andres-lagos-bucket/glue_scripts/data_quality.py"
+      DefaultArguments:
+        "--job-bookmark-option": "job-bookmark-enable"
+        "--config": "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        "--datalake-formats": "iceberg"
+        "--enable-glue-datacatalog": true
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      MaxRetries: 0
+      GlueVersion: 4.0
+      WorkerType: G.1X
+      NumberOfWorkers: !Ref GlueJobNumberWorkersDataQuality
+      Name: !Ref GlueJobNameDataQuality
+      Role: !Ref RoleExecution
+      Tags:
+        team: !Ref TagValue
+
   StepMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
@@ -379,11 +416,36 @@ Resources:
               - Variable: $.Result.JobRun['JobRunState']
                 StringEquals: RUNNING
                 Next: TimerReorderTable
-            Default: Success
+            Default: StartGlueJobDataQuality
           TimerReorderTable:
             Type: Wait
             Seconds: !Ref TimerSecondsProcessReorderTable
             Next: CheckStatusReorderTable
+          StartGlueJobDataQuality:
+            Type: Task
+            Next: CheckStatusDataQuality
+            Resource: arn:aws:states:::glue:startJobRun
+            Parameters:
+              JobName: !Ref GlueJobNameDataQuality
+          CheckStatusDataQuality:
+            Type: Task
+            Next: CheckProcessDataQuality
+            Resource: arn:aws:states:::aws-sdk:glue:getJobRun
+            Parameters:
+              JobName: !Ref GlueJobNameDataQuality
+              RunId.$: $.JobRunId
+            ResultPath: $.Result
+          CheckProcessDataQuality:
+            Type: Choice
+            Choices:
+              - Variable: $.Result.JobRun['JobRunState']
+                StringEquals: RUNNING
+                Next: TimerDataQuality
+            Default: Success
+          TimerDataQuality:
+            Type: Wait
+            Seconds: !Ref TimerSecondsDataQuality
+            Next: CheckStatusDataQuality
           Success:
             Type: Succeed
 
