@@ -53,7 +53,22 @@ spark.sql("""
     SET null_test = True
     WHERE column_name IN ('visible','event_id')
     """).collect()
-
+#create block test
+try:
+    spark.sql("""CREATE TABLE glue_catalog.dictionary_quality.is_block
+        (database STRING,
+        table STRING,
+        column_name STRING,
+        test_name STRING,
+        is_block BOOLEAN,
+        is_deleted BOOLEAN)
+        PARTITIONED BY (`database`)
+        LOCATION 's3://andres-lagos-bucket/iceberg/is_block'
+        TBLPROPERTIES (
+        'table_type'='ICEBERG',
+        'format'='parquet')""").collect()
+except utils.AnalysisException:
+    print("Column already exits")
 
 class Data_Quality:
     "Check the data Quality process in this case null values and length"
@@ -278,6 +293,69 @@ class Data_Quality:
         for table in tables:
             self.execute_tests(table=table)
 
+class Blocked_Values:
+    "Generate block values"
+
+    def __init__(self) -> None:
+        pass
+
+    def generate_block_values(self) -> None:
+        "Generate table blocks rows"
+        sdf_triage_stage = spark.sql("""SELECT database, table, column_name, test_name
+            FROM null_test
+        UNION
+            SELECT database, table, column_name, test_name
+            FROM length_test
+        UNION
+            SELECT NULL AS databaseName, 
+            NULL AS tableName, 
+            NULL AS columnName, 
+            'key_not_unique' AS test_name""")
+        sdf_triage_stage.createOrReplaceTempView("triage_stage")
+    
+    def insert_block_values(self) -> None:
+        "Insert values in the block table"
+        spark.sql("""MERGE INTO glue_catalog.dictionary_quality.is_block AS TGT
+            USING triage_stage AS SRC
+                ON TGT.test_name=SRC.test_name
+            WHEN MATCHED THEN UPDATE SET
+                TGT.is_deleted=False --reactivate deleted tests
+            WHEN NOT MATCHED THEN
+            INSERT
+                (database,
+                table,
+                column_name,
+                test_Name,
+                is_deleted,
+                is_block)
+                VALUES
+                (SRC.database,
+                SRC.table,
+                SRC.column_name,
+                SRC.test_name,
+                False,
+                False)""").collect()
+        sdf_deleted_values = spark.sql("""
+            SELECT t1.*
+            FROM glue_catalog.dictionary_quality.is_block t1
+            ANTI JOIN triage_stage t2
+                ON t1.test_name=t2.test_name""")
+        sdf_deleted_values.createOrReplaceTempView("deleted_values")
+        # flag deleted tests with isDeleted flag
+        spark.sql("""
+            MERGE INTO glue_catalog.dictionary_quality.is_block AS TGT
+            USING deleted_values AS SRC
+                ON  TGT.test_name=SRC.test_name
+            WHEN MATCHED THEN UPDATE SET
+                is_deleted=True
+            """).collect()
+        
+    def main(self):
+        "execute the block main process"
+        self.generate_block_values()
+        self.insert_block_values()
+        
 Data_Quality(database_data = 'data_lake', dictionary_quality = 'dictionary_quality') \
     .main(tables=['zealand', 'australia', 'usa', 'kingdom'])
+Blocked_Values().main()
 job.commit()
